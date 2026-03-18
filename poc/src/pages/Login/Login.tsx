@@ -155,8 +155,8 @@ export default function Login() {
   const lnk: React.CSSProperties = { background: 'none', border: 'none', fontSize: 12, fontWeight: 600, color: '#0F62FE', cursor: 'pointer', padding: '8px 0' };
 
   return (
-    <main style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f5f5f5', padding: 24, boxSizing: 'border-box' }}>
-      <div style={{ display: 'flex', alignItems: 'stretch', width: '100%', maxWidth: 1100, minHeight: 620, borderRadius: 24, overflow: 'hidden', boxShadow: '0 8px 40px rgba(0,0,0,0.12)', background: '#fff' }}>
+    <main style={{ minHeight: '40vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f5f5f5', padding: 24, boxSizing: 'border-box' }}>
+      <div style={{ display: 'flex', alignItems: 'stretch', width: '100%', maxWidth: 1100, minHeight: 600, borderRadius: 24, overflow: 'hidden', boxShadow: '0 8px 40px rgba(0,0,0,0.12)', background: '#fff' }}>
 
         {/* LEFT */}
         <section style={{ flex: 1, background: '#0F62FE', padding: '48px 32px 32px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', position: 'relative', overflow: 'hidden' }}>
@@ -224,7 +224,7 @@ export default function Login() {
 
             {step === 'forgotUser' && (
               <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <h2 style={{ fontSize: 18, fontWeight: 600, color: '#2A2A2B', marginBottom: 20 }}>Forgot User ID</h2>
+                {/* <h3 style={{ fontSize: 15, fontWeight: 600, color: '#2A2A2B', marginBottom: 20 }}>Recover User ID or Password</h3> */}
                 <div style={{ marginBottom: 16 }}>
                   <label style={label}>PAN Number</label>
                   <div style={wrap(!!loginApiErr)}><input type="text" placeholder="Enter PAN Number" style={field} value={forgotPan} onChange={(e) => setForgotPan(e.target.value.toUpperCase())} /></div>
