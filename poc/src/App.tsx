@@ -1,25 +1,24 @@
-import { useAuthStore } from '@/store/useAuthStore';
-import Login from '@/pages/Login/Login';
-import logoSvg from '@/assets/logo.svg';
-import './App.css';
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import Login from "./pages/Login/Login";
+import ForgotCredentials from "./pages/Login/forgotCredentials/ForgotCredentials";
+import Dashboard from "./pages/Dashboard/Dashboard"; 
+import ProtectedRoute from "./routes/ProtectedRoute";
+import PublicRoute from "./routes/PublicRoute";
 
 export default function App() {
-  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
-  const user = useAuthStore((s) => s.user);
-  const logout = useAuthStore((s) => s.logout);
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route element={<PublicRoute />}>
+          <Route path="/login" element={<Login />} />
+          <Route path="/forgot-credentials" element={<ForgotCredentials />} />
+          <Route path="/" element={<Navigate to="/login" replace />} />
+        </Route>
 
-  if (isAuthenticated) {
-    return (
-      <main className="app-root">
-        <div className="welcome-card">
-          <img src={logoSvg} alt="Nest logo" style={{ width: '150px', height: '156px', display: 'block' }} />
-          <h1 className="welcome-title">Welcome, {user?.firstName}!</h1>
-          <p className="welcome-sub">{user?.emailId}</p>
-          <button onClick={logout} className="btn-logout">Logout</button>
-        </div>
-      </main>
-    );
-  }
-
-  return <Login />;
+        <Route element={<ProtectedRoute />}>
+          <Route path="/dashboard" element={<Dashboard />} />
+        </Route>
+      </Routes>
+    </BrowserRouter>
+  );
 }
