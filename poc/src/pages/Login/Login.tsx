@@ -8,6 +8,7 @@ import { useAuthStore } from '../../store/useAuthStore';
 import logoSvg from '../../assets/logo.svg';
 import loginSvg from '../../assets/login.svg';
 import { useNavigate } from 'react-router-dom';
+import BlockedPopup from './components/BlockedPopup';
 
 // ─── Eye Icons ────────────────────────────────────────────────────────────────
 const EyeOff = () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#555" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" /><line x1="1" y1="1" x2="23" y2="23" /></svg>;
@@ -17,6 +18,15 @@ const EyeOn  = () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
 const RedToast = ({ message, onClose }: { message: string; onClose: () => void }) => (
   <div style={{ position: 'fixed', top: 24, right: 24, zIndex: 9999, background: '#dc2626', color: '#fff', padding: '14px 20px', borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.18)', display: 'flex', alignItems: 'center', gap: 12, fontSize: 14, fontWeight: 500, minWidth: 280 }}>
     <span>✕</span>
+    <span style={{ flex: 1 }}>{message}</span>
+    <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 16, padding: 0, lineHeight: 1 }}>✕</button>
+  </div>
+);
+
+// ─── Green Toast ──────────────────────────────────────────────────────────────
+const GreenToast = ({ message, onClose }: { message: string; onClose: () => void }) => (
+  <div style={{ position: 'fixed', top: 24, right: 24, zIndex: 9999, background: '#16a34a', color: '#fff', padding: '14px 20px', borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.18)', display: 'flex', alignItems: 'center', gap: 12, fontSize: 14, fontWeight: 500, minWidth: 280 }}>
+    <span>✓</span>
     <span style={{ flex: 1 }}>{message}</span>
     <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 16, padding: 0, lineHeight: 1 }}>✕</button>
   </div>
@@ -86,25 +96,52 @@ export default function Login() {
   const [otpAttempts, setOtpAttempts] = useState(3);
   const [verifying, setVerifying]     = useState(false);
   const [redToast, setRedToast]       = useState('');
+  const [greenToast, setGreenToast]   = useState('');
+  const [showBlocked, setShowBlocked] = useState(false);
 
   const setHandshake = useAuthStore(s => s.setHandshake);
   const setAuth      = useAuthStore(s => s.setAuth);
 
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<LoginInputs>({ resolver: zodResolver(loginSchema) });
 
-  const resetToLogin = () => { setStep('login'); setOtp(''); setOtpErr(''); setOtpAttempts(3); setLoginApiErr(''); };
+  // ── Call preAuthHandshake when login page loads ───────────────────────────
+  useEffect(() => {
+    const doHandshake = async () => {
+      try {
+        const hs = await preAuthHandshake();
+        setHandshake(hs.bffPublicKey);
+      } catch (error) {
+        console.error('Pre-auth handshake failed:', error);
+      }
+    };
+    doHandshake();
+  }, []);
+
+  const resetToLogin = () => {
+    setStep('login'); setOtp(''); setOtpErr('');
+    setOtpAttempts(3); setLoginApiErr('');
+  };
 
   const onLogin = async (data: LoginInputs) => {
     setLoginApiErr('');
     try {
-      const hs = await preAuthHandshake(); setHandshake(hs.bffPublicKey);
       const res = await login(data.email, data.password);
       if (res.message === 'success') {
-        setUsername(data.email); setStep('otp'); setOtp(''); setOtpErr(''); setOtpAttempts(3);
+        setUsername(data.email);
+        setStep('otp'); setOtp(''); setOtpErr(''); setOtpAttempts(3);
       } else {
-        setLoginApiErr('Invalid Username or Password');
+        setLoginApiErr('Invalid Username or Password.');
       }
-    } catch { setLoginApiErr('Invalid Username or Password'); }
+    } catch (error: any) {
+      // ── 423 Locked → account blocked by server ────────────────────────────
+      if (error?.response?.status === 423) {
+        setUsername(data.email);
+        setShowBlocked(true);
+      } else {
+        setLoginApiErr('Invalid Username or Password.');
+
+      }
+    }
   };
 
   const onVerify = async () => {
@@ -113,19 +150,17 @@ export default function Login() {
     if (otpAttempts <= 0) return;
     setOtpErr(''); setVerifying(true);
     try {
-      const res = await validateOtp(username, otp); setAuth(res, res.jwtTokens);
+      const res = await validateOtp(username, otp);
+      setAuth(res, res.jwtTokens);
     } catch {
       const remaining = otpAttempts - 1;
       setOtpAttempts(remaining);
       if (remaining > 0) {
-        // Show inline red error with remaining attempts
         setOtpErr(`Wrong OTP, ${remaining} ${remaining === 1 ? 'attempt' : 'attempts'} remaining.`);
       } else {
-        // 0 attempts — red toast then navigate back to login
-        setOtp('');
-        setOtpErr('');
+        setOtp(''); setOtpErr('');
         setRedToast('Login again');
-        setTimeout(() => { setRedToast(''); resetToLogin(); }, 500);
+        setTimeout(() => { setRedToast(''); resetToLogin(); }, 1500);
       }
     } finally { setVerifying(false); }
   };
@@ -138,7 +173,25 @@ export default function Login() {
 
   return (
     <>
+      {/* Red toast — OTP attempts exhausted */}
       {redToast && <RedToast message={redToast} onClose={() => setRedToast('')} />}
+
+      {/* Green toast — account unblocked */}
+      {greenToast && <GreenToast message={greenToast} onClose={() => setGreenToast('')} />}
+
+      {/* Account blocked popup — triggered by 423 from login API */}
+      {showBlocked && (
+        <BlockedPopup
+          username={username}
+          onUnblocked={() => {
+            setShowBlocked(false);
+            resetToLogin();
+            setGreenToast('Your account is unblocked. Please login again.');
+            setTimeout(() => { setGreenToast(''); navigate('/login'); }, 2500);
+          }}
+          onClose={() => setShowBlocked(false)}
+        />
+      )}
 
       <main style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f5f5f5', padding: 24, boxSizing: 'border-box' }}>
         <div style={{ display: 'flex', alignItems: 'stretch', width: '100%', maxWidth: 1100, minHeight: 600, borderRadius: 24, overflow: 'hidden', boxShadow: '0 8px 40px rgba(0,0,0,0.12)', background: '#fff' }}>
@@ -173,7 +226,9 @@ export default function Login() {
                 <form onSubmit={handleSubmit(onLogin)} style={{ display: 'flex', flexDirection: 'column' }}>
                   <div style={{ marginBottom: 16 }}>
                     <label style={label}>Mobile no. / Email / Client ID</label>
-                    <div style={wrap(!!errors.email || !!loginApiErr)}><input type="text" placeholder="Enter Mobile no. / Email" style={field} {...register('email')} /></div>
+                    <div style={wrap(!!errors.email || !!loginApiErr)}>
+                      <input type="text" placeholder="Enter Mobile no. / Email" style={field} {...register('email')} />
+                    </div>
                     {errors.email && <span style={errText}>{errors.email.message}</span>}
                   </div>
                   <div style={{ marginBottom: 16 }}>
@@ -187,7 +242,9 @@ export default function Login() {
                     {errors.password && <span style={errText}>{errors.password.message}</span>}
                   </div>
                   {loginApiErr && <p style={{ ...errText, textAlign: 'center', marginBottom: 10, fontWeight: 600 }}>{loginApiErr}</p>}
-                  <ActionBtn type="submit" disabled={isSubmitting}>{isSubmitting ? 'Please wait...' : 'Login'}</ActionBtn>
+                  <ActionBtn type="submit" disabled={isSubmitting}>
+                    {isSubmitting ? 'Please wait...' : 'Login'}
+                  </ActionBtn>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 12 }}>
                     <button type="button" style={lnk} onClick={() => navigate('/forgot-credentials')}>Forgot user ID or password?</button>
                     <button type="button" style={lnk}>Guest login</button>
@@ -201,7 +258,9 @@ export default function Login() {
                   <p style={{ fontSize: 12, color: '#707071', margin: '0 0 24px' }}>OTP Sent on {username}</p>
                   <OtpBoxInput value={otp} onChange={setOtp} error={otpErr} />
                   <ResendTimer onResend={() => { setOtp(''); setOtpErr(''); setOtpAttempts(3); }} />
-                  <ActionBtn onClick={onVerify} disabled={verifying || otpAttempts <= 0}>{verifying ? 'Verifying...' : 'Verify'}</ActionBtn>
+                  <ActionBtn onClick={onVerify} disabled={verifying || otpAttempts <= 0}>
+                    {verifying ? 'Verifying...' : 'Verify'}
+                  </ActionBtn>
                   <div style={{ marginTop: 12 }}>
                     <button type="button" style={lnk} onClick={resetToLogin}>← Back to Login</button>
                   </div>
